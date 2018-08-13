@@ -1,40 +1,190 @@
-/*
- * file   : ram.v 
- * author : zyl
- * date   : 2018-8-11
- * addr   : whu.edu.ionosphereLab
- */
-
-
-module ram(
+module lockeddoor(
 input              clk,
 input              reset_n,
-input              wr_en,       // 写使能，高电平有效
-input              rd_en,       // 读使能，高电平有效
-input  [ 7:0]      addr,        // 地址线，8位
-inout  [31:0]      data_io      // 数据线
+input  [11:0]      inputChar,   // 输入信号，0-9 * #
+output reg         open         // 开门信号
 );
 
-reg    [31:0]      RAM [255:0]; // 内存    
-reg    [31:0]      data;        // 数据缓冲
+integer i=0;
+reg                    KEEP          = 0;
+reg        [ 7: 0]     PASSWD [5:0];               // 初始密码  
+reg        [ 7: 0]     INPUTS [5:0];
 
-integer i; 
+reg                    pressing      = 0;          // 正在输入
+reg                    forbidInput   = 0;          // 禁止输入
+reg        [ 7: 0]     curInputChar  = 0;          // 当前输入字符
+reg        [ 7: 0]     curMode       = 0;          // 当前模式 (0:选择模式中 1:登录 2:修改密码)
+reg        [ 7: 0]     state         = 0;
+reg        [ 3: 0]     num           = 0;
 
-always @(posedge clk or negedge reset_n) begin
-    if (!reset_n) begin         // 复位
-        for(i=0;i<=255;i=i+1)  
-            RAM[i] <= 32'b0;
-    end else if (wr_en) begin   // 读
-        RAM[addr] <= data_io;
-    end else if (rd_en) begin   // 写
-        data <= RAM[addr];
-    end else begin              // 空闲时，数据缓冲为高阻态
-        data <= 32'bz;
-    end
+
+always @(posedge clk) begin
+    case (inputChar)
+      12'b000000000001:begin
+        curInputChar <= 0;
+        pressing     <= 1;
+      end
+      12'b000000000010:begin
+        curInputChar <= 1;
+        pressing     <= 1;
+      end
+      12'b000000000100:begin
+        curInputChar <= 2;
+        pressing     <= 1;
+      end
+      12'b000000001000:begin
+        curInputChar <= 3;
+        pressing     <= 1;
+      end
+      12'b000000010000:begin
+        curInputChar <= 4;
+        pressing     <= 1;
+      end
+      12'b000000100000:begin
+        curInputChar <= 5;
+        pressing     <= 1;
+      end
+      12'b000001000000:begin
+        curInputChar <= 6;
+        pressing     <= 1;
+      end
+      12'b000010000000:begin
+        curInputChar <= 7;
+        pressing     <= 1;
+      end
+      12'b000100000000:begin
+        curInputChar <= 8;
+        pressing     <= 1;
+      end
+      12'b001000000000:begin
+        curInputChar <= 9;
+        pressing     <= 1;
+      end
+      12'b010000000000:begin
+        curInputChar <= 10;
+        pressing     <= 1;
+      end
+      12'b100000000000:begin
+        curInputChar <= 11;
+        pressing     <= 1;
+      end
+	  default:begin
+        curInputChar <= 0;
+        pressing     <= 0;
+      end
+    endcase
 end
 
-assign data_io = rd_en? data : 32'bz; //数据端三态门
+
+initial begin
+    PASSWD[0] <= 1;
+    PASSWD[1] <= 2;
+    PASSWD[2] <= 3;
+    PASSWD[3] <= 4;
+    PASSWD[4] <= 5;
+    PASSWD[5] <= 6;
+end
+
+
+always @(posedge clk ) begin
+    case (state)
+      0:begin
+        if (KEEP) begin
+            state <= 1;
+        end else begin
+            num <= 0;
+            open <= 0;
+            state <= 1;
+            curMode <= 0;  
+            for (i=0;i<6;i=i+1) begin
+                INPUTS[i]<= 0;
+            end
+        end
+      end
+      1:begin//输入许可
+        forbidInput<=0;
+        KEEP  <= 0;
+        state <= 2;
+      end
+      2:begin//等待输入
+        if (pressing) begin
+            state <= 3;
+        end
+      end
+      3:begin//决策阶段
+        if (curMode == 0) begin /************************  等待确认当前模式  ************************/
+            if (curInputChar<=9) begin          /***** 输入是[0-9]  *****/
+                curMode <= 1;
+                num <= 0;
+            end else if (curInputChar==10) begin/***** 输入是[ * ]  *****/
+                curMode <= 2;
+            end else begin
+                state <= 255;
+            end
+        end else begin         /************************ 　　　返回现场 　　 ************************/
+            if (curMode==1) begin
+                state <= 4;
+            end else if (curMode==7) begin
+                state <= 5;
+            end else begin
+                state <= 255;
+            end
+        end
+
+        if (curInputChar==11) begin/***** 输入是[ # ]  *****/
+            state <= 255;
+        end
+
+
+      end
+      4:begin//验码阶段
+        if (num<5) begin// 输入6位密码
+            INPUTS[num] <= curInputChar;
+            forbidInput <= 1;
+            num   <= num + 1;
+            KEEP  <= 1;
+            state <= 255;// !!!
+        end else begin
+            INPUTS[num] <= curInputChar;
+            forbidInput <= 1;
+            state <= 5;  // 密码输入完成，等待确认
+        end
+      end
+      5:begin
+        for (i=0;i<6;i=i+1) begin
+            if (INPUTS[i]==PASSWD[i]) begin
+                if (i==5) begin//验证成功，开门
+                    state <= 6;
+                end
+            end else begin//验证失败 
+                state <= 255;       
+            end
+        end
+      end
+      6:begin//打开开门信号
+        open  <= 1;
+        state <= 255;
+      end
+      7:begin
+        
+      end
+      8:begin
+        
+      end
+      255:begin
+        if (forbidInput && !pressing) begin
+            forbidInput <= 0;
+            state <= 255;
+        end else if (!pressing) begin
+            state <= 0;
+        end
+      end
+      default:
+        state <= 255;
+    endcase
+end
+
+
+
 
 endmodule
-
-//end ram
