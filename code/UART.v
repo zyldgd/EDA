@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-
+// https://www.cnblogs.com/qingkai/p/7729621.html
 // 系统时钟50MHz，波特率115200，带忙闲指示信号ready
 module uart_tx #(parameter BAUDRATE = 115200, parameter FREQ = 50_000_000)(
 input               clk,
