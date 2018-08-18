@@ -7,7 +7,7 @@ input               reset_n,
 input               wrreq,
 input       [7:0]   wdata,
 input  reg          rx,
-output reg          tx,
+output reg          TX,
 output reg          ready
 );
 
@@ -57,31 +57,28 @@ always @(posedge clk or negedge reset_n) begin
 end
 
 /*
-0x41 <=> 0b0100 0001
+example: 
+send 0x41 <=> 0b0100 0001
 ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
 │ 0 │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │ 7 │ 8 │ 9 │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-
-┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
 │ S │ 1 │ 0 │ 0 │ 0 │ 0 │ 0 │ 1 │ 0 │ E │
 └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
-
 ┐   ┌───┐                   ┌───┐   ┌───┐
-│ S │ 1 │ 0   0   0   0   0 │ 1 │ 0 │ 1 │
+│ 0 │ 1 │ 0   0   0   0   0 │ 1 │ 0 │ 1 │
 └───┘   └───────────────────┘   └───┘   └
-
 */
 // 先发送一个起始位0，然后8位数据位，最后是停止位1
 always @(posedge clk or negedge reset_n) begin
     if(!reset_n)
-        tx <= 1;
+        TX <= 1;
     else if(ready == 0 && cnt_clk == 0) begin
         if(cnt_bit == 0)
-            tx <= 0;
+            TX <= 0;
         else if(cnt_bit == 9)
-            tx <= 1;
+            TX <= 1;
         else
-            tx <= wdata[cnt_bit - 1];
+            TX <= wdata[cnt_bit - 1];
     end
 end
 

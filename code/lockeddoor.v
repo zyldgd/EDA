@@ -11,12 +11,11 @@ reg        [ 7: 0]     PASSWD [5:0];               // 初始密码
 reg        [ 7: 0]     INPUTS [5:0];
 
 reg                    pressing      = 0;          // 正在输入
-reg                    forbidInput   = 0;          // 禁止输入
 reg        [ 7: 0]     curInputChar  = 0;          // 当前输入字符
-reg        [ 7: 0]     curMode       = 0;          // 当前模式 (0:选择模式中 1:登录 2:修改密码)
+reg        [ 7: 0]     curMode       = 0;          // 当前模式 (0:选择模式中 1:登录 2:修改)
 reg        [ 7: 0]     state         = 0;
 reg        [ 3: 0]     num           = 0;
-
+reg        [ 3: 0]     num2          = 0;
 
 always @(posedge clk) begin
     case (inputChar)
@@ -92,7 +91,8 @@ always @(posedge clk ) begin
         if (KEEP) begin
             state <= 1;
         end else begin
-            num <= 0;
+            num  <= 0;
+            num2 <= 0;
             open <= 0;
             state <= 1;
             curMode <= 0;  
@@ -101,84 +101,96 @@ always @(posedge clk ) begin
             end
         end
       end
-      1:begin//输入许可
-        forbidInput<=0;
+      1:begin// 输入许可
         KEEP  <= 0;
         state <= 2;
       end
-      2:begin//等待输入
+      2:begin// 等待输入
         if (pressing) begin
             state <= 3;
         end
       end
-      3:begin//决策阶段
+      3:begin// 决策阶段
         if (curMode == 0) begin /************************  等待确认当前模式  ************************/
             if (curInputChar<=9) begin          /***** 输入是[0-9]  *****/
                 curMode <= 1;
-                num <= 0;
             end else if (curInputChar==10) begin/***** 输入是[ * ]  *****/
                 curMode <= 2;
+                KEEP  <= 1;
+                state <= 255;
             end else begin
                 state <= 255;
             end
         end else begin         /************************ 　　　返回现场 　　 ************************/
             if (curMode==1) begin
                 state <= 4;
-            end else if (curMode==7) begin
-                state <= 5;
+            end else if (curMode==2) begin
+                state <= 4; // 输入原密码
+            end else if (curMode==3) begin
+                state <= 7; // 输入新密码
             end else begin
                 state <= 255;
             end
         end
-
-        if (curInputChar==11) begin/***** 输入是[ # ]  *****/
+        if (curInputChar==11) begin/***** 输入是[ # ] *****/
             state <= 255;
         end
-
-
       end
-      4:begin//验码阶段
+      4:begin// 验码阶段
         if (num<5) begin// 输入6位密码
             INPUTS[num] <= curInputChar;
-            forbidInput <= 1;
-            num   <= num + 1;
+            num <= num + 1;
             KEEP  <= 1;
             state <= 255;// !!!
         end else begin
             INPUTS[num] <= curInputChar;
-            forbidInput <= 1;
             state <= 5;  // 密码输入完成，等待确认
+            num <= 0;
         end
       end
       5:begin
-        for (i=0;i<6;i=i+1) begin
-            if (INPUTS[i]==PASSWD[i]) begin
-                if (i==5) begin//验证成功，开门
-                    state <= 6;
-                end
-            end else begin//验证失败 
-                state <= 255;       
-            end
+        if (INPUTS[num]==PASSWD[num] && num<6) begin
+            num<=num+1;
+        end else if (num>=6) begin
+            state <= 6;
+        end else begin
+            state <= 255;
         end
       end
-      6:begin//打开开门信号
-        open  <= 1;
-        state <= 255;
+      6:begin// 打开开门信号
+        if (curMode == 1) begin
+            open  <= 1;
+            state <= 255;
+        end else if (curMode == 2) begin
+            num   <=0;
+            curMode <= 3;// 输入新密码
+            KEEP  <= 1;
+            state <= 255; 
+        end else begin
+            state <= 255;
+        end
       end
-      7:begin
-        
+      7:begin// 输入新密码
+         if (num<5) begin
+            PASSWD[num] <= curInputChar;
+            num   <= num + 1;
+            KEEP  <= 1;
+            state <= 255;
+        end else begin
+            PASSWD[num] <= curInputChar;
+            state <= 255;
+        end  
       end
       8:begin
-        
+
       end
-      255:begin
-        if (forbidInput && !pressing) begin
-            forbidInput <= 0;
-            state <= 255;
-        end else if (!pressing) begin
+
+      255:begin // 等待按键释放
+        if (!pressing) begin
             state <= 0;
         end
       end
+
       default:
         state <= 255;
     endcase
