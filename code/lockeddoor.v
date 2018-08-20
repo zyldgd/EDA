@@ -1,13 +1,21 @@
+/*
+ * file   : lockeddoor.v
+ * author : zyl
+ * date   : 2018-8-20
+ * addr   : whu.edu.ionosphereLab
+ */
+
 module lockeddoor(
 input              clk,
 input              reset_n,
 input  [11:0]      inputChar,   // 输入信号，0-9 * #
+input  [ 5:0]      password,    // 外部密码输入
 output reg         open         // 开门信号
 );
 
-integer i=0;
+integer                i             = 0;
 reg                    KEEP          = 0;
-reg        [ 7: 0]     PASSWD [5:0];               // 初始密码  
+reg        [ 7: 0]     PASSWD [5:0];               // 初始密码
 reg        [ 7: 0]     INPUTS [5:0];
 
 reg                    pressing      = 0;          // 正在输入
@@ -15,8 +23,8 @@ reg        [ 7: 0]     curInputChar  = 0;          // 当前输入字符
 reg        [ 7: 0]     curMode       = 0;          // 当前模式 (0:选择模式中 1:登录 2:修改)
 reg        [ 7: 0]     state         = 0;
 reg        [ 3: 0]     num           = 0;
-reg        [ 3: 0]     num2          = 0;
 
+/************************   输入判定  ************************/
 always @(posedge clk) begin
     case (inputChar)
       12'b000000000001:begin
@@ -67,7 +75,7 @@ always @(posedge clk) begin
         curInputChar <= 11;
         pressing     <= 1;
       end
-	  default:begin
+      default:begin
         curInputChar <= 0;
         pressing     <= 0;
       end
@@ -75,6 +83,7 @@ always @(posedge clk) begin
 end
 
 
+/************************  初始化密码  ************************/
 initial begin
     PASSWD[0] <= 1;
     PASSWD[1] <= 2;
@@ -85,23 +94,29 @@ initial begin
 end
 
 
+/************************  一段状态机  ************************/
+
 always @(posedge clk ) begin
+if (!reset_n) begin
+    state <= 0;
+    KEEP <= 0;
+    open <= 0;
+end else begin
     case (state)
       0:begin
         if (KEEP) begin
             state <= 1;
         end else begin
             num  <= 0;
-            num2 <= 0;
             open <= 0;
             state <= 1;
-            curMode <= 0;  
+            curMode <= 0;
             for (i=0;i<6;i=i+1) begin
                 INPUTS[i]<= 0;
             end
         end
       end
-      1:begin// 输入许可
+      1:begin// 接受输入
         KEEP  <= 0;
         state <= 2;
       end
@@ -136,7 +151,7 @@ always @(posedge clk ) begin
             state <= 255;
         end
       end
-      4:begin// 验码阶段
+      4:begin// 记录输入
         if (num<5) begin// 输入6位密码
             INPUTS[num] <= curInputChar;
             num <= num + 1;
@@ -148,7 +163,7 @@ always @(posedge clk ) begin
             num <= 0;
         end
       end
-      5:begin
+      5:begin// 验证阶段
         if (INPUTS[num]==PASSWD[num] && num<6) begin
             num<=num+1;
         end else if (num>=6) begin
@@ -157,7 +172,7 @@ always @(posedge clk ) begin
             state <= 255;
         end
       end
-      6:begin// 打开开门信号
+      6:begin// 输出阶段
         if (curMode == 1) begin
             open  <= 1;
             state <= 255;
@@ -165,7 +180,7 @@ always @(posedge clk ) begin
             num   <=0;
             curMode <= 3;// 输入新密码
             KEEP  <= 1;
-            state <= 255; 
+            state <= 255;
         end else begin
             state <= 255;
         end
@@ -179,10 +194,7 @@ always @(posedge clk ) begin
         end else begin
             PASSWD[num] <= curInputChar;
             state <= 255;
-        end  
-      end
-      8:begin
-
+        end
       end
 
       255:begin // 等待按键释放
@@ -194,6 +206,9 @@ always @(posedge clk ) begin
       default:
         state <= 255;
     endcase
+end
+
+
 end
 
 
