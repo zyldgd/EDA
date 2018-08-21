@@ -9,7 +9,7 @@ module lockeddoor(
 input              clk,
 input              reset_n,
 input  [11:0]      inputChar,   // 输入信号，0-9 * #
-input  [ 5:0]      password,    // 外部密码输入
+input  [ 7:0]      password,    // 外部密码输入
 output reg         open         // 开门信号
 );
 
