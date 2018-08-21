@@ -14,13 +14,13 @@ output reg         open         // 开门信号
 );
 
 integer                i             = 0;
-reg                    KEEP          = 0;
+reg                    KEEP          = 0;          // 继续标志
 reg        [ 7: 0]     PASSWD [5:0];               // 初始密码
 reg        [ 7: 0]     INPUTS [5:0];
 
 reg                    pressing      = 0;          // 正在输入
 reg        [ 7: 0]     curInputChar  = 0;          // 当前输入字符
-reg        [ 7: 0]     curMode       = 0;          // 当前模式 (0:选择模式中 1:登录 2:修改)
+reg        [ 7: 0]     curMode       = 0;          // 当前模式 (0:待选择模式 1:登录 2:修改 3:更新)
 reg        [ 7: 0]     state         = 0;
 reg        [ 3: 0]     num           = 0;
 
@@ -98,12 +98,12 @@ end
 
 always @(posedge clk ) begin
 if (!reset_n) begin
-    state <= 0;
+    state <= 0; 
     KEEP <= 0;
     open <= 0;
 end else begin
     case (state)
-      0:begin
+      0:begin// 初始化
         if (KEEP) begin
             state <= 1;
         end else begin
@@ -207,11 +207,7 @@ end else begin
         state <= 255;
     endcase
 end
-
-
 end
 
-
-
-
 endmodule
+//end lockeddoor
