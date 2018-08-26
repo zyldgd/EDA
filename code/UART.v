@@ -1,14 +1,23 @@
+/*
+ * file   : uart_tx.v
+ * author : zyl
+ * date   : 2018-8-20
+ * addr   : whu.edu.ionosphereLab
+ */
+
+
 `timescale 1ns/1ps
 // https://www.cnblogs.com/qingkai/p/7729621.html
 // 系统时钟50MHz，波特率115200，带忙闲指示信号ready
+// T : 2x10^-8
 module uart_tx #(parameter BAUDRATE = 115200, parameter FREQ = 50_000_000)(
 input               clk,
 input               reset_n,
 input               wrreq,
 input       [7:0]   wdata,
-input  reg          rx,
+input  reg          RX,
 output reg          TX,
-output reg          ready
+output reg          IDLE
 );
 
 localparam T = FREQ / BAUDRATE;
@@ -26,18 +35,18 @@ assign end_cnt_bit = end_cnt_clk && cnt_bit == 10 - 1;
 // 有写请求时将ready信号拉底，待到数据发送完毕再将信号拉
 always @(posedge clk or negedge reset_n) begin
     if(!reset_n)
-        ready <= 1;
+        IDLE <= 1;
     else if(wrreq)
-        ready <= 0;
+        IDLE <= 0;
     else if(end_cnt_bit)
-        ready <= 1;
+        IDLE <= 1;
 end
 
 // 两层计数结构，cnt_clk计数每一位所占的时钟数，cnt_bit计数1个开始位，8个数据位，一个停止位，共10位
 always @(posedge clk or negedge reset_n) begin
     if(!reset_n)
         cnt_clk <= 0;
-    else if(ready == 0) begin
+    else if(IDLE == 0) begin
         if(end_cnt_clk)
             cnt_clk <= 0;
         else
@@ -72,7 +81,7 @@ send 0x41 <=> 0b0100 0001
 always @(posedge clk or negedge reset_n) begin
     if(!reset_n)
         TX <= 1;
-    else if(ready == 0 && cnt_clk == 0) begin
+    else if(IDLE == 0 && cnt_clk == 0) begin
         if(cnt_bit == 0)
             TX <= 0;
         else if(cnt_bit == 9)
