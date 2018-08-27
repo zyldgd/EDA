@@ -4,7 +4,8 @@ module adder1(
 
 input       [7:0]      A,
 input       [7:0]      B,
-output reg  [8:0]      sum,
+output      [8:0]      sum
+);
 
 assign sum[8:0] = {1'd0, A} + {1'd0, B};
 
