@@ -1,71 +1,69 @@
+`timescale 1ns / 1ps
+
 module spi_master(
-	input wire[7:0] in_data,
-	input wire clk,
-	input wire[1:0] addr, // commonds
-	input wire wr,
-	input wire rd,
-	input wire cs,
-	output reg[7:0] out_data,
-	inout mosi,
-	input miso,
-	inout sclk
-    );
+	input          clk, 
+	input  [7:0]   in_data,// 数据输入
+	input  [1:0]   addr,// 地址线
+	input          wr,// 写使能
+	input          rd,// 读使能
+	input          cs,// 片选
+	inout          mosi,// 主发从收
+	input          miso,// 主收从发
+	inout          sclk,// 时钟
+	output reg[7:0] out_data// 数据输出
+);
 	
-	// --------define internal register and buffer--------
-	// output buffer stage
+	// --------定义内部寄存器和缓存--------
 	reg sclk_buf = 0;
 	reg mosi_buf = 0;
-	// idle flag , busy = 0 if no data to receive or send , or else set busy = 1
+	
+	// 忙碌标志寄存器 , 没有数据收发时 busy = 0 否则 busy = 1
 	reg busy = 0;
-	// shift register
+	
+	// 移位寄存器
 	reg[7:0] in_buf = 0;
 	reg[7:0] out_buf = 0;
-
-
-	reg[7:0] clk_cnt = 0;
-	// division of clk , clk_div=0 means that clk is not be divide , and modify it could implement corresponding sck for device
-	reg[7:0] clk_div = 0;
 	
+	// 分频 , 无分频时 clk_div=0	
+	reg[7:0] clk_cnt = 0;
+	reg[7:0] clk_div = 0;
 	reg[4:0] cnt = 0;
-	// --------------------------------------------------
 
-
-	// the port of module links internal buffer
+	// 组合逻辑 连接外部端口
 	assign sclk = sclk_buf;
 	assign mosi = mosi_buf;
 
-
-	//sclk positive edge read data into out-shift register from miso , implement read operation
+	// 在sclk 上升沿时，从miso读入数据到out-shift 
 	always @(posedge sclk_buf) begin
 		out_buf[0] <= miso;
 		out_buf <= out_buf << 1;
 	end 
 
-	// read data (combinatorial logic that level sensitive , detect all input)
+	// 读数据
 	always @(cs or wr or rd or addr or out_buf or busy or clk_div) begin
 		out_data = 8'bx;
 		if (cs && rd) begin
 			case(addr)
 				2'b00 : out_data = out_buf;
-				2'b01 : out_data = {7'b0 , busy}; // when send data encounter spi is busy , return busy singal 
+				2'b01 : out_data = {7'b0 , busy}; //当发送冲突的时候，返回 busy 信号
 				2'b10 : out_data = clk_div;
 				default : out_data = out_data;
 			endcase
 		end
 	end
-	
-	// sclk negitive edge write data to mosi
+
+	// sclk 下降沿时 写入数据到 mosi
 	always @(posedge clk) begin
-		if (!busy) begin // idle state load data into send buffer
+		if (!busy) begin // 空闲时加载数据到发送缓冲中
 			if(cs && wr) begin
-				case(addr) // commonds
+				case(addr)
 					2'b00 : begin
 						in_buf <= in_data;
 						busy <= 1;
 						cnt <= 0;
 					end
 					2'b10 : begin
-						in_buf <= clk_div; // load number of division to slave for implement sync of sclk
+						in_buf <= clk_div;
 					end
 					default : in_buf <= in_buf; 
 				endcase
@@ -75,21 +73,23 @@ module spi_master(
 				cnt <= 0;
 			end
 		end
-		else begin // when 8-bits data write into buffer ,  begin send with bit by bit
+		else begin //当8位数据写入到缓冲后，开始按位发送
 			clk_cnt <= clk_cnt + 1;
-			if (clk_cnt >= clk_div) begin // divide clk
+			if (clk_cnt >= clk_div) begin
 				clk_cnt <= 0;
-				if (cnt % 2 == 0) begin // when csk_buf is negitive , shift data into mosi buffer
+				if (cnt % 2 == 0) begin //当 csk_buf 为 negitive ,将数据移位到 mosi 缓冲中
 					mosi_buf <= in_buf[7];
 					in_buf <= in_buf << 1;
 				end 
 				else begin
 					mosi_buf <= mosi_buf;
 				end
+
 				if (cnt > 0 && cnt < 17) begin
 					sclk_buf <= ~sclk_buf;
 				end
-				// 8-bits had sent over , spi regain idle
+
+				// 8位数据发送完成,SPI空闲
 				if (cnt >= 17) begin 
 					cnt <= 0;
 					busy <= 0;
