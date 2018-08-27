@@ -1,5 +1,5 @@
 /*
- * file   : testBench.v 
+ * file   : TestBench_RAM.v 
  * author : zyl
  * date   : 2018-8-11
  * addr   : whu.edu.ionosphereLab
@@ -7,7 +7,7 @@
 
 `timescale 1 ps/ 1 ps
 
-module ram_vlg_tst();
+module TestBench_RAM();
 /******************    端口   ********************/
 reg [7:0] addr;
 reg clk;

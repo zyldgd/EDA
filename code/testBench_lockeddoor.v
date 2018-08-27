@@ -1,6 +1,6 @@
 `timescale 1 ps/ 1 ps
 
-module testBench_lockeddoor();
+module TestBench_lockeddoor();
 
 reg              clk;
 reg              reset_n;
