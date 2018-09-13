@@ -9,13 +9,14 @@
 `define LEFT  1'b0
 `define UP    1'b0
 `define DOWN  1'b1
-`define bar_move_speed 4'b1001
+
+`define ballSpeed  9
 
 
 module DE1_SOC(
     input                   CLOCK_50,// mclk
-    input    [9:0]          SW,// rst
-    input    [3:0]          KEY,//to_left  //to_right
+    input    [9:0]          SW,// reset
+    input    [3:0]          KEY,//keyL,keyR
     //input [3:0] bar_move_speed,
     output                  VGA_HS,
     output                  VGA_BLANK_N,
@@ -45,10 +46,10 @@ clk_Div_2 clkDiv(
 
 
 VGA_Dispay VGA(
-    .rst        (SW[0]),
+    .reset        (SW[0]),
     .clk        (CLOCK_50),
-    .to_left    (KEY[3]),
-    .to_right   (KEY[2]),
+    .keyL    (KEY[3]),
+    .keyR   (KEY[2]),
     //.bar_move_speed (bar_move_speed),
     .hs         (VGA_HS),
     .Blue       (VGA_B),
@@ -64,10 +65,10 @@ endmodule
 
 
 module VGA_Dispay(
-    input                rst,
+    input                reset,
     input                clk,
-    input                to_left,
-    input                to_right,
+    input                keyL,
+    input                keyR,
      //input [3:0] bar_move_speed,
     output reg           hs,
     output reg           vs,
@@ -76,7 +77,8 @@ module VGA_Dispay(
     output reg   [7:0]   Blue,
     output reg           lose );
 
-    //parameter defin ition
+/**************************************************** parameter ****************************************************/
+    
     parameter Width = 640;		// Pixels/Active Line (pixels)
     parameter Height = 480;		// Lines/Active Frame (lines)
 
@@ -88,36 +90,41 @@ module VGA_Dispay(
     parameter Va = 2;			// Verical synchro Pulse Width (lines)
     parameter Vd = 10;			// Verical synchro Front Porch (lines)
 
-    parameter UP_BOUND = 10;
-    parameter DOWN_BOUND = 480;
-    parameter LEFT_BOUND = 10;
-    parameter RIGHT_BOUND = 630;
+    parameter boundU = 20;
+    parameter boundD = 460;
+
+    parameter boundL = 20;
+    parameter boundR = 620;
    
-    parameter ballR = 10;      // Radius of the ball
 
+/**************************************************** register  ****************************************************/
+    reg                  clk_25M = 0;      // 25MHz frequency
 
-    /*register definition*/
-    reg   [9:0]   Hcnt;             // horizontal counter  if = PLD-1 >>> Hcnt <= 0
-    reg   [9:0]   Vcnt;             // verical counter     if = LFD-1 >>> Vcnt <= 0
-    reg           clk_25M = 0;      // 25MHz frequency
-    reg           h_speed = `RIGHT;
-    reg           v_speed = `UP;
+    reg signed  [15:0]   Hcnt;             // horizontal counter  if = PLD-1 >>> Hcnt <= 0
+    reg signed  [15:0]   Vcnt;             // verical counter     if = LFD-1 >>> Vcnt <= 0
 
-    // The position of the downside bar
-    reg   [9:0]   barUp = 400;
-    reg   [9:0]   barDown = 410;
-    reg   [9:0]   barLeft = 280;
-    reg   [9:0]   barRight = 380;
+    // bar
+    reg signed  [15:0]   barX = 405;
+    reg signed  [15:0]   barY = 430;
+    reg signed  [15:0]   barHw = 100/2;
+    reg signed  [15:0]   barHh = 10/2; 
+    reg signed  [15:0]   barMoveXSpeed = 9;
+ 
+    // ball
+    reg signed  [15:0]   ballX = 330;
+    reg signed  [15:0]   ballY = 390;
+    reg signed  [15:0]   ballR = 10;
+    reg signed  [15:0]   ballMoveXSpeed = 9;
+    reg signed  [15:0]   ballMoveYSpeed = 9;
 
-    // The circle heart position of the ball
-    reg   [9:0]   ballX = 330;
-    reg   [9:0]   ballY = 390;
-
+/*****************************************************************************************************************/
 
     //generate a half frequency clock of 25MHz
     always@(posedge(clk)) begin
         clk_25M <= ~clk_25M;
     end
+
+
 
     /*generate the hs && vs timing*/
     always@(posedge(clk_25M)) begin
@@ -142,9 +149,61 @@ module VGA_Dispay(
     end
 
 
-    //Display the downside bar and the ball
+
+
+
+    // modify the Xspeed of the bar 
+    always @ (posedge vs) begin
+        if (~keyL && (barX-barHw-barMoveXSpeed)>boundL) begin
+            barX  <= barX - barMoveXSpeed;
+        end else if(~keyR && (barX+barHw+barMoveXSpeed)<boundR) begin
+            barX  <= barX + barMoveXSpeed;
+        end         
+    end
+
+    // modify the Xspeed of the ball
+    always @ (posedge vs) begin
+        if (reset) begin
+            ballMoveXSpeed <= +`ballSpeed; 
+        end else begin
+            if (ballX+ballR > boundR) begin
+                ballMoveXSpeed <= -`ballSpeed;
+            end else if (  ballX-ballR < boundL) begin
+                ballMoveXSpeed <= +`ballSpeed;
+            end         
+        end            
+    end
+
+    // modify the Yspeed of the ball
+    always @ (posedge vs) begin
+        if (reset) begin
+            ballMoveYSpeed <= -`ballSpeed;
+        end else begin
+            if (ballY-ballR < boundU) begin
+                ballMoveYSpeed <= +`ballSpeed;
+            end else if (ballY+ballR > boundD) begin
+                ballMoveYSpeed <= -`ballSpeed;
+            end 
+            if ((barX-barHw) < (ballX+ballMoveXSpeed) && (ballX+ballMoveXSpeed) < (barX+barHw)  && (barY-barHh)<(ballY+ballR + ballMoveYSpeed) && (ballY+ballR + ballMoveYSpeed)<(barY+barHh) ) begin
+                ballMoveYSpeed <= -`ballSpeed;
+            end
+        end            
+    end
+
+    // flush the poistion of the bar and ball
+    always @ (posedge vs) begin
+        if (reset) begin
+            ballX <= barX;
+            ballY <= barY-barHh-ballR;
+        end else begin
+            ballX <= ballX + ballMoveXSpeed;
+            ballY <= ballY + ballMoveYSpeed;
+        end
+    end
+
+    //Display the bar and the ball
     always @ (posedge clk_25M) begin
-        if (Vcnt>=barUp && Vcnt<=barDown && Hcnt>=barLeft && Hcnt<=barRight) begin  // Display the downside bar
+        if (Vcnt>=(barY-barHh) && Vcnt<=(barY+barHh) && Hcnt>=(barX-barHw) && Hcnt<=(barX+barHw)) begin  // Display the bar
             Red    <= 255;
             Green  <= 255;
             Blue   <= 255;
@@ -159,75 +218,14 @@ module VGA_Dispay(
         end
     end
 
-
-    //flush the image every zhen = =||
-    always @ (posedge vs) begin
-        if(to_left&&to_right) begin 	// movement of the bar
-            barLeft <= barLeft;
-            barRight <= barRight;
-        end else if (~to_left &&((barLeft - `bar_move_speed) >= LEFT_BOUND)) begin
-            barLeft <= barLeft - `bar_move_speed;
-            barRight <= barRight - `bar_move_speed;
-        end else if(~to_right && ((barRight + `bar_move_speed )<= RIGHT_BOUND)) begin
-            barLeft <= barLeft + `bar_move_speed;
-            barRight <= barRight + `bar_move_speed;
-        end
-        //else
-
-        //movement of the ball
-        if (v_speed == `UP) // go up
-            ballY <= rst?390:ballY - `bar_move_speed;
-        else //go down
-            ballY <= rst?390:ballY + `bar_move_speed;
-
-        if (h_speed == `RIGHT) // go right
-            ballX <= rst?(barLeft+barRight)/2:ballX + `bar_move_speed;
-        else //go down
-            ballX <= rst?(barLeft+barRight)/2:ballX - `bar_move_speed;
-    end
-
-     
-    //change directions when reach the edge or crush the bar
-    always @ (negedge vs) begin
-        if (ballY <= UP_BOUND) begin  // Here, all the jugement should use >= or <= instead of ==
-            v_speed <= 1;              // Because when the offset is more than 1, the axis may step over the line
-            lose <= 0;
-        end else if (ballY >= (barUp - ballR) && ballX <= barRight && ballX >= barLeft) begin
-            v_speed <= 0;
-        end else if (ballY >= barDown && ballY < (DOWN_BOUND - ballR)) begin // Ahhh!!! What the fuck!!! I miss the ball!!!
-            lose <= 1; //Do what you want when lose
-        end else if (ballY >= (DOWN_BOUND - ballR + 1)) begin
-            v_speed <= 0;
-        end else begin
-            v_speed <= v_speed;
-        end
-
-        if (ballX <= LEFT_BOUND) begin
-            h_speed <= 1;
-        end else if (ballX >= RIGHT_BOUND) begin
-            h_speed <= 0;
-        end else begin
-            h_speed <= h_speed;
-        end
-
-        if (ballX <= LEFT_BOUND) begin
-            h_speed <= 1;
-        end else if (RIGHT_BOUND <= ballX) begin
-            h_speed <= 0;
-        end else begin
-            h_speed <= h_speed;
-        end
-
-    end
-
 endmodule
+
 
 
 module clk_Div_2(
     input           clk,
     output  reg     clk_25M );
 
-   
     always@(posedge(clk)) begin
         clk_25M <= ~clk_25M;
     end
