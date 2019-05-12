@@ -105,7 +105,7 @@ lockeddoor i1 (
   
    
 task press;
-  input [12:0]  INPUTS;
+  input [11:0]  INPUTS;
   
   begin
     #1000                  
